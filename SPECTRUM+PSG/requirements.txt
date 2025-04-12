@@ -20,7 +20,7 @@ streamlit
 geopy
 overpy
 networkx
-streamlit-js-eval=
+streamlit-js-eval
 folium
 streamlit-folium
 requests
