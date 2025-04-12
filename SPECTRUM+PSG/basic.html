@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Human Anatomy Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="info">3D Anatomical Model Viewer</div>
+    <div id="loading">Loading Model...</div>
+
+    <!-- Three.js Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/OBJLoader.js"></script>
+
+    <script>
+        // Initialize variables
+        let model; // Global model reference
+
+        // Initialize the scene, camera, and renderer
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        // Add ambient light for overall illumination
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        // Add directional light for shadows and definition
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 10, 10);
+        scene.add(directionalLight);
+
+        // Add a point light for better definition
+        const pointLight = new THREE.PointLight(0xffffff, 0.5);
+        pointLight.position.set(5, 5, 5);
+        scene.add(pointLight);
+
+        // Set up camera
+        const camera = new THREE.PerspectiveCamera(
+            45, window.innerWidth / window.innerHeight, 0.1, 1000
+        );
+        camera.position.z = 5;
+
+        // Set up renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // Add orbit controls for interaction
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+
+        // Load anatomical model (OBJ format)
+        const loader = new THREE.OBJLoader();
+        
+        // Set up raycaster for mouse picking
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedPart = null;
+        let originalMaterials = new Map();
+
+        // Load the model
+        loader.load(
+            'Male.OBJ',  // Use your OBJ file path
+            function (object) {
+                model = object;
+                
+                // Apply default material to all meshes
+                model.traverse(function(child) {
+                    if (child instanceof THREE.Mesh) {
+                        child.material = new THREE.MeshPhongMaterial({
+                            color: 0xcccccc,
+                            shininess: 30,
+                            specular: 0x222222
+                        });
+                    }
+                });
+                
+                // Center the model
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.x = -center.x;
+                model.position.y = -center.y;
+                model.position.z = -center.z;
+                
+                // Scale the model appropriately
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scale = 3 / maxDim;
+                model.scale.set(scale, scale, scale);
+                
+                scene.add(model);
+                
+                // Hide loading message
+                document.getElementById('loading').style.display = 'none';
+            },
+            function (xhr) {
+                // Update loading progress
+                const percent = (xhr.loaded / xhr.total * 100).toFixed();
+                document.getElementById('loading').textContent = 'Loading Model: ' + percent + '%';
+            },
+            function (error) {
+                console.error('An error happened', error);
+                document.getElementById('loading').textContent = 'Error loading model!';
+            }
+        );
+
+        // Add anatomical labels
+        function addAnatomicalLabels() {
+            // This would be implemented to add HTML overlays for different body parts
+            // Example of what this could contain:
+            /*
+            const labels = [
+                { name: "Brain", position: new THREE.Vector3(0, 1.7, 0) },
+                { name: "Heart", position: new THREE.Vector3(0, 0.5, 0.2) },
+                // etc.
+            ];
+            */
+        }
+
+        // Event listener for mouse movement
+        document.addEventListener('mousemove', function (event) {
+            // Calculate mouse position in normalized device coordinates
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Update the picking ray with the camera and mouse position
+            raycaster.setFromCamera(mouse, camera);
+            
+            // Calculate objects intersecting the picking ray
+            if (model) {
+                const intersects = raycaster.intersectObject(model, true);
+                
+                // Reset previously selected part
+                if (selectedPart) {
+                    selectedPart.material = originalMaterials.get(selectedPart);
+                    selectedPart = null;
+                }
+                
+                // Highlight new selection
+                if (intersects.length > 0) {
+                    selectedPart = intersects[0].object;
+                    if (!originalMaterials.has(selectedPart)) {
+                        originalMaterials.set(selectedPart, selectedPart.material.clone());
+                    }
+                    
+                    // Create highlight material
+                    const highlightMaterial = selectedPart.material.clone();
+                    highlightMaterial.emissive = new THREE.Color(0x333333);
+                    highlightMaterial.emissiveIntensity = 0.5;
+                    selectedPart.material = highlightMaterial;
+                    
+                    // Display part name if available
+                    if (selectedPart.name) {
+                        document.getElementById('info').textContent = selectedPart.name;
+                    } else {
+                        document.getElementById('info').textContent = 'Anatomical Structure';
+                    }
+                } else {
+                    document.getElementById('info').textContent = '3D Anatomical Model Viewer';
+                }
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
+
