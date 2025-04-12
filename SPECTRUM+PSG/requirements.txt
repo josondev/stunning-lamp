@@ -16,3 +16,14 @@ langchain
 langchain-core
 langchain-community
 langchain-groq
+streamlit
+geopy
+overpy
+networkx
+streamlit-js-eval=
+folium
+streamlit-folium
+requests
+polyline
+numpy
+certifi
